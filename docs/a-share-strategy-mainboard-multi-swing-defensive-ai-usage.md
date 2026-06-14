@@ -1,6 +1,6 @@
-# a-share-strategy-mainboard-multi-swing-defensive AI 使用流程
+# a-share-strategy-mainboard-multi-swing-defensive 安装使用文档
 
-这份文档说明如何把 `a-share-strategy-mainboard-multi-swing-defensive` 配到常见 AI 工具里使用，并给出从安装到实际提问的最短路径。
+这份文档说明如何把 `a-share-strategy-mainboard-multi-swing-defensive` 配到常见 AI 工具里使用，并给出安装、提问方式和典型使用案例。
 
 适用场景：
 
