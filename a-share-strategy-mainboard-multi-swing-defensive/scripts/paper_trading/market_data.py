@@ -6,6 +6,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
+import json
+import subprocess
+import sys
 from typing import Dict, List, Optional
 
 import akshare as ak
@@ -20,11 +23,24 @@ HEADERS = {
     "Referer": "https://finance.eastmoney.com",
 }
 SINA_KLINE_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
+SINA_QUOTE_URL = "https://hq.sinajs.cn/list="
 TENCENT_DAY_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
 TENCENT_MIN_URL = "https://ifzq.gtimg.cn/appstock/app/kline/mkline"
 TENCENT_QUOTE_URL = "https://qt.gtimg.cn/q="
 SINA_FREQ_MAP = {"5m": 5, "15m": 15, "30m": 30, "60m": 60, "1d": 240, "1w": 1200, "1M": 7200}
 TENCENT_DAY_FREQ_MAP = {"1d": "day", "1w": "week", "1M": "month"}
+INDEX_CODE_MAP = {
+    "000001": "sh000001",
+    "000002": "sh000002",
+    "000016": "sh000016",
+    "000300": "sh000300",
+    "000688": "sh000688",
+    "000852": "sh000852",
+    "000905": "sh000905",
+    "399001": "sz399001",
+    "399005": "sz399005",
+    "399006": "sz399006",
+}
 
 
 def _build_session() -> requests.Session:
@@ -68,10 +84,17 @@ def normalize_code(code: str) -> str:
     if c.startswith(("sh", "sz")):
         return c
     if c.isdigit():
+        if c in INDEX_CODE_MAP:
+            return INDEX_CODE_MAP[c]
         if c.startswith("6"):
             return "sh" + c
         return "sz" + c
     return c
+
+
+def _is_index_symbol(code: str) -> bool:
+    norm = normalize_code(code)
+    return norm in INDEX_CODE_MAP.values()
 
 
 def _code_digits(code: str) -> str:
@@ -89,6 +112,47 @@ def _generate_mainboard_codes() -> list[str]:
             market = "sh" if code.startswith(("600", "601", "603", "605")) else "sz"
             codes.append(f"{market}{code}")
     return codes
+
+
+def _get_mainboard_universe_from_akshare(top_n: int, timeout_seconds: int = 300) -> list[str]:
+    code = """
+import json
+import akshare as ak
+import pandas as pd
+
+top_n = int(__import__("sys").argv[1])
+df = ak.stock_zh_a_spot_em()
+if df is None or df.empty:
+    print("[]")
+    raise SystemExit(0)
+out = df.copy()
+out["代码"] = out["代码"].astype(str).str.zfill(6)
+out["名称"] = out["名称"].astype(str)
+out = out[
+    out["代码"].str.startswith(("600", "601", "603", "605", "000", "001", "002"))
+    & (~out["名称"].str.contains("ST", case=False, na=False))
+    & (~out["名称"].str.contains("退", na=False))
+]
+out["成交额"] = pd.to_numeric(out.get("成交额"), errors="coerce")
+out = out.dropna(subset=["成交额"]).sort_values("成交额", ascending=False)
+if top_n > 0:
+    out = out.head(top_n)
+print(json.dumps(out["代码"].drop_duplicates().tolist(), ensure_ascii=False))
+"""
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", code, str(int(top_n))],
+            capture_output=True,
+            text=True,
+            timeout=max(1, int(timeout_seconds)),
+            check=True,
+        )
+        stdout = (proc.stdout or "").strip()
+        if not stdout:
+            return []
+        return json.loads(stdout)
+    except Exception:
+        return []
 
 
 def infer_limit_ratio(symbol: str, name: str = "") -> float:
@@ -183,6 +247,33 @@ def _get_price_min_tencent(session: requests.Session, code: str, count: int, fre
         return pd.DataFrame()
 
 
+def _get_price_day_akshare(code: str, count: int) -> pd.DataFrame:
+    normalized = normalize_code(code)
+    try:
+        if _is_index_symbol(normalized):
+            ak_df = ak.index_zh_a_hist(symbol=_code_digits(normalized), period="daily")
+            if ak_df is not None and not ak_df.empty:
+                ak_df = ak_df.tail(count).copy()
+                ak_df = ak_df.rename(
+                    columns={"日期": "time", "开盘": "open", "最高": "high", "最低": "low", "收盘": "close", "成交量": "volume"}
+                )
+                ak_df["time"] = pd.to_datetime(ak_df["time"], errors="coerce")
+                ak_df = ak_df.dropna(subset=["time"]).set_index("time")
+                ak_df.index.name = ""
+                return ak_df[["open", "high", "low", "close", "volume"]]
+        ak_df = ak.stock_zh_a_daily(symbol=normalized, adjust="")
+        if ak_df is not None and not ak_df.empty:
+            ak_df = ak_df.tail(count).copy()
+            ak_df = ak_df.rename(columns={"date": "time"})
+            ak_df["time"] = pd.to_datetime(ak_df["time"], errors="coerce")
+            ak_df = ak_df.set_index("time")
+            ak_df.index.name = ""
+            return ak_df[["open", "high", "low", "close", "volume"]]
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
 def get_price(session: requests.Session, code: str, frequency: str = "1d", count: int = 60) -> pd.DataFrame:
     norm = normalize_code(code)
     if frequency in ("1d", "1w", "1M"):
@@ -193,17 +284,9 @@ def get_price(session: requests.Session, code: str, frequency: str = "1d", count
         if not df.empty:
             return df
         if frequency == "1d":
-            try:
-                ak_df = ak.stock_zh_a_daily(symbol=norm, adjust="")
-                if ak_df is not None and not ak_df.empty:
-                    ak_df = ak_df.tail(count).copy()
-                    ak_df = ak_df.rename(columns={"date": "time"})
-                    ak_df["time"] = pd.to_datetime(ak_df["time"], errors="coerce")
-                    ak_df = ak_df.set_index("time")
-                    ak_df.index.name = ""
-                    return ak_df[["open", "high", "low", "close", "volume"]]
-            except Exception:
-                pass
+            df = _get_price_day_akshare(norm, count)
+            if not df.empty:
+                return df
         return pd.DataFrame()
     if frequency == "1m":
         return _get_price_min_tencent(session, norm, count, frequency)
@@ -216,6 +299,12 @@ def get_price(session: requests.Session, code: str, frequency: str = "1d", count
 def _parse_tencent_quote(line: str) -> Optional[dict]:
     if "~" not in line or len(line) < 50:
         return None
+    raw_symbol = ""
+    try:
+        lhs = line.split("=", 1)[0].strip()
+        raw_symbol = lhs.replace("v_", "", 1)
+    except Exception:
+        raw_symbol = ""
     parts = line.split("~")
     if len(parts) < 48:
         return None
@@ -225,9 +314,12 @@ def _parse_tencent_quote(line: str) -> Optional[dict]:
             return None
         prev_close = float(parts[4]) if parts[4] else 0
         change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close > 0 else 0
-        market_prefix = "sh" if parts[0] == "1" else "sz"
+        symbol = raw_symbol if raw_symbol.startswith(("sh", "sz")) else ""
+        if not symbol:
+            market_prefix = "sh" if parts[0] == "1" else "sz"
+            symbol = f"{market_prefix}{parts[2]}"
         return {
-            "code": f"{market_prefix}{parts[2]}",
+            "code": symbol,
             "name": parts[1],
             "price": price,
             "prev_close": prev_close,
@@ -240,6 +332,45 @@ def _parse_tencent_quote(line: str) -> Optional[dict]:
             "market_cap": float(parts[45]) if len(parts) > 45 and parts[45] else 0,
             "limit_up": float(parts[47]) if parts[47] else 0,
             "limit_down": float(parts[48]) if len(parts) > 48 and parts[48] else 0,
+        }
+    except Exception:
+        return None
+
+
+def _parse_sina_quote(line: str) -> Optional[dict]:
+    if "=" not in line or '"' not in line:
+        return None
+    try:
+        lhs, rhs = line.split("=", 1)
+        symbol = lhs.strip().replace("var hq_str_", "", 1)
+        payload = rhs.strip().strip(";").strip('"')
+        if not symbol.startswith(("sh", "sz")) or not payload:
+            return None
+        parts = payload.split(",")
+        if len(parts) < 10:
+            return None
+        name = parts[0].strip()
+        prev_close = float(parts[2]) if parts[2] else 0
+        price = float(parts[3]) if parts[3] else 0
+        if price <= 0:
+            return None
+        volume = float(parts[8]) if parts[8] else 0
+        amount = float(parts[9]) if parts[9] else 0
+        change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close > 0 else 0
+        return {
+            "code": symbol,
+            "name": name,
+            "price": price,
+            "prev_close": prev_close,
+            "open": float(parts[1]) if parts[1] else 0,
+            "change_pct": change_pct,
+            "volume": int(volume),
+            "amount": amount,
+            "high": float(parts[4]) if parts[4] else 0,
+            "low": float(parts[5]) if parts[5] else 0,
+            "market_cap": 0,
+            "limit_up": None,
+            "limit_down": None,
         }
     except Exception:
         return None
@@ -313,6 +444,7 @@ class MarketDataProvider:
     def __init__(self) -> None:
         self._session = _build_session()
         self._realtime_session = _build_session()
+        self._mainboard_universe_timeout_seconds = 300
 
     def normalize_symbol(self, symbol: str) -> str:
         norm = normalize_realtime_code(symbol)
@@ -429,25 +561,12 @@ class MarketDataProvider:
         return out
 
     def get_mainboard_universe(self, as_of: str | None = None, top_n: int = 80) -> list[str]:
-        try:
-            df = ak.stock_zh_a_spot_em()
-            if df is None or df.empty:
-                return []
-            out = df.copy()
-            out["代码"] = out["代码"].astype(str).str.zfill(6)
-            out["名称"] = out["名称"].astype(str)
-            out = out[
-                out["代码"].str.startswith(("600", "601", "603", "605", "000", "001", "002"))
-                & (~out["名称"].str.contains("ST", case=False, na=False))
-                & (~out["名称"].str.contains("退", na=False))
-            ]
-            out["成交额"] = pd.to_numeric(out.get("成交额"), errors="coerce")
-            out = out.dropna(subset=["成交额"]).sort_values("成交额", ascending=False)
-            if top_n > 0:
-                out = out.head(int(top_n))
-            return out["代码"].drop_duplicates().tolist()
-        except Exception:
-            pass
+        universe = _get_mainboard_universe_from_akshare(
+            top_n=int(top_n),
+            timeout_seconds=self._mainboard_universe_timeout_seconds,
+        )
+        if universe:
+            return universe
         try:
             session = _build_session()
             session.trust_env = False
@@ -484,6 +603,44 @@ class MarketDataProvider:
             else:
                 df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
                 df = df.sort_values("volume", ascending=False)
+            if top_n > 0:
+                df = df.head(int(top_n))
+            return df["code"].drop_duplicates().tolist()
+        except Exception:
+            pass
+        try:
+            session = _build_session()
+            session.trust_env = False
+            session.headers.update({"Referer": "https://finance.sina.com.cn"})
+            codes = _generate_mainboard_codes()
+            batches = [codes[i : i + 400] for i in range(0, len(codes), 400)]
+            rows: list[dict] = []
+
+            def fetch_batch(batch: list[str]) -> list[dict]:
+                resp = session.get(f"{SINA_QUOTE_URL}{','.join(batch)}", timeout=20)
+                out: list[dict] = []
+                for line in resp.text.strip().split("\n"):
+                    parsed = _parse_sina_quote(line)
+                    if parsed:
+                        out.append(parsed)
+                return out
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(fetch_batch, batch) for batch in batches]
+                for future in as_completed(futures):
+                    rows.extend(future.result())
+            if not rows:
+                return []
+            df = pd.DataFrame(rows)
+            df["code"] = df["code"].astype(str).str.replace("^(sh|sz)", "", regex=True).str.zfill(6)
+            df["name"] = df["name"].astype(str)
+            df = df[
+                (~df["name"].str.contains("ST", case=False, na=False))
+                & (~df["name"].str.contains("退", na=False))
+                & (pd.to_numeric(df["price"], errors="coerce") > 0)
+            ]
+            df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
+            df = df.sort_values("amount", ascending=False)
             if top_n > 0:
                 df = df.head(int(top_n))
             return df["code"].drop_duplicates().tolist()
