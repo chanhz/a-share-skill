@@ -49,6 +49,13 @@ mkdir -p ~/.claude/skills
 cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.claude/skills/
 ```
 
+### Qoder
+
+```bash
+mkdir -p ~/.qoder/skills
+cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.qoder/skills/
+```
+
 ### OpenCode
 
 ```bash
