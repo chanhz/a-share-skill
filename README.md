@@ -12,6 +12,7 @@ a-share-skill/
   macd-second-golden-cross/                       # MACD 底背离 + 零轴下二次金叉
   macd-trend-resonance-stock-picker/              # 均线 + MACD 趋势共振选股
   tuige-shortline-trading/                        # 退哥短线场景化交易决策
+  pankou_stock_change/                            # 盘口异动与主力资金跟随策略
   README.md
 ```
 
@@ -79,11 +80,65 @@ a-share-skill/
     - 以 `market-regime -> stock-selection -> 场景模块 -> exit/discipline` 形成统一决策流  
     - 场景模块覆盖趋势回踩、涨停后回调、连板接力、洗盘末端确认  
     - 输出统一口径：`trigger / invalidation / risk / position_grade`  
-    - 提供独立术语口径文档，减少“高位、有效跌破、缩倍量”等词义漂移  
+    - 提供独立术语口径文档，减少"高位、有效跌破、缩倍量"等词义漂移  
   - **典型使用场景**：  
     - 盘前先筛环境，再决定今天可做哪些场景  
     - 对单只个股快速归类当前结构，并输出触发与失效条件  
     - 盘中避免情绪化追单，回到统一退出与仓位纪律框架
+
+- `pankou_stock_change`：基于东方财富盘口异动数据的**主力资金跟随策略** Skill  
+  - **主要能力**：  
+    - 全市场 22 种盘口异动扫描（火箭发射/大笔买入/高台跳水/封涨停板等）  
+    - 个股异动明细查询，按买卖方向与强度分（1~10）量化  
+    - 个股盘口强度评分（买入强度 - 卖出强度，含时间衰减）  
+    - 主力资金跟随策略：买入/卖出/持仓信号的生成  
+    - 持仓卖出信号实时监控（每3分钟轮询，新异动触发即报警）  
+    - **逐秒仿真回测**：按时间顺序重放全天异动，追踪信号触发与升级的完整过程  
+  - **典型使用场景**：  
+    - 全市场扫描"大笔买入"异动快速发现主力标的  
+    - 对持仓股做盘口强度分析，判断主力是否转向  
+    - 尾盘评估个股是否具备开仓条件（剔除涨停股后）  
+    - 回测历史日期，验证信号在何时触发、是否领先于价格下跌  
+  - **数据源**：东方财富盘口异动 API（独立于 a-share-data）
+
+### pankou_stock_change 仿真回测用法
+
+该 skill 的 `monitor_portfolio.py` 支持三种模式：
+
+```bash
+# 1. 实时监控：每3分钟检查持仓卖出信号
+python3 pankou_stock_change/scripts/monitor_portfolio.py \
+  --portfolio holdings.txt
+
+# 2. 快照回测：指定时间点查看持仓信号
+python3 pankou_stock_change/scripts/monitor_portfolio.py \
+  --portfolio holdings.txt --date 20260611 --backtest-time 14:50
+
+# 3. 逐秒仿真：按时间顺序重放全天异动，追踪信号完整演变
+python3 pankou_stock_change/scripts/monitor_portfolio.py \
+  --portfolio holdings.txt --date 20260611 --simulate
+```
+
+持仓文件格式 (`holdings.txt`)：
+```
+600519 贵州茅台
+000858 五粮液
+300750 宁德时代
+```
+
+仿真输出示例：
+```
+        时间 异动类型       方向   价    累计卖 累计买  连卖 评分 信号
+  09:35:36 火箭发射        ↑买  44.98    0     1    0   0
+  09:36:42 火箭发射        ↑买  45.88    0     2    0   0
+  ...
+  09:54:18 高台跳水        ↓卖  45.91    1     5    1   5 🟠 卖出      ← 首次触发
+  → [09:54:18] 高台跳水! 价45.91
+  09:59:18 火箭发射        ↑买  46.95    1     6    1   5 🟠 卖出
+  09:59:18 有大卖盘        ↓卖  46.95    2     6    1   6 🟠 卖出      ← 评分升级
+  ...
+最终: 评分6 🟠 卖出 卖出3次 强度24
+```
 
 ## 交流群
 
@@ -136,6 +191,7 @@ cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.openclaw/workspace/ski
 cp -R macd-second-golden-cross ~/.openclaw/workspace/skills/
 cp -R macd-trend-resonance-stock-picker ~/.openclaw/workspace/skills/
 cp -R tuige-shortline-trading ~/.openclaw/workspace/skills/
+cp -R pankou_stock_change ~/.openclaw/workspace/skills/
 ```
 
 ### Cursor
@@ -148,6 +204,7 @@ cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.cursor/skills/
 cp -R macd-second-golden-cross ~/.cursor/skills/
 cp -R macd-trend-resonance-stock-picker ~/.cursor/skills/
 cp -R tuige-shortline-trading ~/.cursor/skills/
+cp -R pankou_stock_change ~/.cursor/skills/
 ```
 
 ### Claude Code
@@ -160,6 +217,7 @@ cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.claude/skills/
 cp -R macd-second-golden-cross ~/.claude/skills/
 cp -R macd-trend-resonance-stock-picker ~/.claude/skills/
 cp -R tuige-shortline-trading ~/.claude/skills/
+cp -R pankou_stock_change ~/.claude/skills/
 ```
 
 ### OpenCode
@@ -172,6 +230,7 @@ cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.opencode/skills/
 cp -R macd-second-golden-cross ~/.opencode/skills/
 cp -R macd-trend-resonance-stock-picker ~/.opencode/skills/
 cp -R tuige-shortline-trading ~/.opencode/skills/
+cp -R pankou_stock_change ~/.opencode/skills/
 ```
 
 如果你的 OpenCode 使用的是自定义 skills 路径，请把上面的目录替换成你本机配置路径。
@@ -186,11 +245,12 @@ cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.agents/skills/
 cp -R macd-second-golden-cross ~/.agents/skills/
 cp -R macd-trend-resonance-stock-picker ~/.agents/skills/
 cp -R tuige-shortline-trading ~/.agents/skills/
+cp -R pankou_stock_change ~/.agents/skills/
 ```
 
 ### 安装后快速自检
 
-1. 确认目标目录下存在 `a-share-data/SKILL.md`、`a-share-paper-trading/SKILL.md`、`a-share-strategy-mainboard-multi-swing-defensive/SKILL.md`、`macd-second-golden-cross/SKILL.md`、`macd-trend-resonance-stock-picker/SKILL.md` 与 `tuige-shortline-trading/SKILL.md`
+1. 确认目标目录下存在 `a-share-data/SKILL.md`、`a-share-paper-trading/SKILL.md`、`a-share-strategy-mainboard-multi-swing-defensive/SKILL.md`、`macd-second-golden-cross/SKILL.md`、`macd-trend-resonance-stock-picker/SKILL.md`、`tuige-shortline-trading/SKILL.md` 与 `pankou_stock_change/SKILL.md`
 2. 新开会话后发一个明确请求，例如：
    - “用 a-share-data 拉取 600519 最近 20 个交易日的日线”
    - “用 a-share-paper-trading 创建模拟账户并下一个限价单”
@@ -198,6 +258,7 @@ cp -R tuige-shortline-trading ~/.agents/skills/
   - “用 macd-second-golden-cross 给我这只票做三档分级并给出止损位”
   - “用 macd-trend-resonance-stock-picker 生成今日 A/B/C/D 候选并给出触发与失效条件”
   - “用 tuige-shortline-trading 按场景给这只票做 trigger/invalidation/risk/position_grade 判断”
+  - “用 pankou-stock-change 分析 603738 在 20260611 的盘口强度并给出买卖信号”
 
 ### 参考文档
 
