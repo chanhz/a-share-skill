@@ -369,7 +369,6 @@ cp -R pankou_stock_change ~/.agents/skills/
 
 ## 其他 Skill
 
-<<<<<<< HEAD
 1. 确认目标目录下存在 `a-share-data/SKILL.md`、`a-share-paper-trading/SKILL.md`、`a-share-strategy-mainboard-multi-swing-defensive/SKILL.md`、`macd-second-golden-cross/SKILL.md`、`macd-trend-resonance-stock-picker/SKILL.md`、`tuige-shortline-trading/SKILL.md` 与 `pankou_stock_change/SKILL.md`
 2. 新开会话后发一个明确请求，例如：
    - “用 a-share-data 拉取 600519 最近 20 个交易日的日线”
