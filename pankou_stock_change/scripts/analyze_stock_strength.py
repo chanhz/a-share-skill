@@ -55,6 +55,7 @@ def run_fetch(args: List[str]) -> List[Dict[str, Any]]:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
+            print (f"Error running fetch: {result.stderr}", file=sys.stderr)
             return []
         data = json.loads(result.stdout)
         if isinstance(data, dict):
