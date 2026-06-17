@@ -1,8 +1,11 @@
-# a-share-data
+# a-share-skill
 
-基于 A 股市场的数据分析 Skill 集合，提供实时行情、历史与财务、技术指标等多种能力，面向 Agent 使用。
+面向 AI 工具的 A 股数据分析、量化选股与模拟交易 skill 集合，适合 stock analysis、quant trading、paper trading、A-share strategy workflow：
 
-## 目录结构与 Skill 列表
+- `a-share-data`：数据查询与分析
+- `a-share-strategy-mainboard-multi-swing-defensive`：主板趋势回踩信号
+- `a-share-strategy-allmarket-multi-swing-defensive`：全市场趋势回踩信号
+- `a-share-paper-trading`：模拟盘执行与回测
 
 ```bash
 a-share-skill/
@@ -86,6 +89,14 @@ a-share-skill/
     - 对单只个股快速归类当前结构，并输出触发与失效条件  
     - 盘中避免情绪化追单，回到统一退出与仓位纪律框架
 
+你可以直接让 AI：
+
+- 查个股实时行情、历史走势、技术指标、事件和行业信息
+- 扫描主板或全市场候选，输出买入参考和持仓卖出参考
+- 创建 `calm1` 模拟账户，查看账户详情、全部交易记录并下模拟单
+- 结合大盘、候选、持仓和账户状态，判断今天该买、卖、持有还是不动
+
+
 - `pankou_stock_change`：基于东方财富盘口异动数据的**主力资金跟随策略** Skill  
   - **主要能力**：  
     - 全市场 22 种盘口异动扫描（火箭发射/大笔买入/高台跳水/封涨停板等）  
@@ -142,10 +153,9 @@ python3 pankou_stock_change/scripts/monitor_portfolio.py \
 
 ## 交流群
 
-
 <img width="400" alt="39afc5617ddc27f26af912496edd3d34" src="https://github.com/user-attachments/assets/46d48fbf-6a9e-4d34-9966-0df52fe06a86" />
 
-### 模拟仓一个半月 30 个点收益
+## 模拟仓一个半月 32 个点收益
 
 <table>
   <tr>
@@ -162,15 +172,108 @@ python3 pankou_stock_change/scripts/monitor_portfolio.py \
   </tr>
 </table>
 
+## 四个核心 Skill
 
+### `a-share-data`
 
-## 全局安装（openclaw / cursor / claude code / opencode / codex）
+适合问：
 
-以下写法以“安装到用户级全局目录”为主，适合你这种一套技能多项目复用的场景。命令在本仓库根目录执行。
+- 这只票现在怎么样
+- 最近 60 天走势怎样
+- 有没有事件驱动
+- 沪深300、热点板块、北向资金现在怎么样
 
-### openclaw
+能做：
 
-方式一：通过 ClawHub 安装（推荐，便于版本管理）
+- 实时行情、历史 K 线、技术指标、事件、行业、指数与宏观数据
+
+文档：
+
+- [docs/A股数据安装使用文档.md](docs/A股数据安装使用文档.md)
+
+### `a-share-strategy-mainboard-multi-swing-defensive`
+
+适合问：
+
+- 今天有哪些主板候选
+- 我的持仓要不要卖
+- 今天更适合买新票还是偏防守
+
+能做：
+
+- 主板池扫描、买入参考、卖出参考、批量现价快照
+
+文档：
+
+- [docs/主板趋势回踩策略安装使用文档.md](docs/主板趋势回踩策略安装使用文档.md)
+
+### `a-share-strategy-allmarket-multi-swing-defensive`
+
+适合问：
+
+- 今天全市场有哪些趋势回踩候选
+- 创业板和科创板要不要一起纳入扫描
+- 同一套趋势回踩逻辑下，全市场和主板版差异是什么
+
+能做：
+
+- 全市场高流动性池扫描、买入参考、卖出参考、批量现价快照
+
+文档：
+
+- [docs/a-share-strategy-allmarket-multi-swing-defensive.md](docs/a-share-strategy-allmarket-multi-swing-defensive.md)
+
+### `a-share-paper-trading`
+
+适合问：
+
+- 给 `calm1` 创建模拟账户
+- 看 `calm1` 账户详情、持仓、订单、全部交易记录
+- 给 `calm1` 下模拟买单或卖单
+- 跑简单回测
+
+能做：
+
+- 账户管理、下单、撤单、持仓、订单、成交、账户估值、回测
+
+文档：
+
+- [docs/模拟仓安装使用文档.md](docs/模拟仓安装使用文档.md)
+
+## 最短案例
+
+- `查数据`：用 `a-share-data` 看 600519 最新行情、最近 60 日日线和 MACD。
+- `跑主板策略`：用 `a-share-strategy-mainboard-multi-swing-defensive` 扫今天主板候选，只看最终过滤结果。
+- `跑全市场策略`：用 `a-share-strategy-allmarket-multi-swing-defensive` 扫今天全市场候选，只看最终过滤结果。
+- `管模拟盘`：用 `a-share-paper-trading` 创建 `calm1`，初始资金 `1000000`，再查看 `calm1` 账户详情和全部交易记录。
+
+## 组合使用
+
+- `数据分析`
+  - `a-share-data`
+  - 适合做单票分析、市场状态观察和批量拉数
+
+- `策略判断`
+  - `a-share-data + a-share-strategy-mainboard-multi-swing-defensive`
+  - 适合做主板候选扫描、持仓卖出参考和环境判断
+
+- `更宽股票池判断`
+  - `a-share-data + a-share-strategy-allmarket-multi-swing-defensive`
+  - 适合把创业板和科创板一起纳入趋势回踩扫描
+
+- `模拟执行闭环`
+  - `a-share-strategy-mainboard-multi-swing-defensive + a-share-paper-trading`
+  - 适合让 AI 先分析，再决定是否给 `calm1` 买入、卖出、减仓或不交易
+
+详细案例：
+
+- [主板趋势回踩策略与模拟仓联动案例](docs/主板趋势回踩策略与模拟仓联动案例.md)
+
+## 安装
+
+以下示例包含四个核心 skill：`a-share-data`、`a-share-strategy-mainboard-multi-swing-defensive`、`a-share-strategy-allmarket-multi-swing-defensive`、`a-share-paper-trading`。
+
+### Codex
 
 ```bash
 clawhub install a-share-trading
@@ -192,6 +295,11 @@ cp -R macd-second-golden-cross ~/.openclaw/workspace/skills/
 cp -R macd-trend-resonance-stock-picker ~/.openclaw/workspace/skills/
 cp -R tuige-shortline-trading ~/.openclaw/workspace/skills/
 cp -R pankou_stock_change ~/.openclaw/workspace/skills/
+mkdir -p ~/.agents/skills
+cp -R a-share-data ~/.agents/skills/
+cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.agents/skills/
+cp -R a-share-strategy-allmarket-multi-swing-defensive ~/.agents/skills/
+cp -R a-share-paper-trading ~/.agents/skills/
 ```
 
 ### Cursor
@@ -199,12 +307,13 @@ cp -R pankou_stock_change ~/.openclaw/workspace/skills/
 ```bash
 mkdir -p ~/.cursor/skills
 cp -R a-share-data ~/.cursor/skills/
-cp -R a-share-paper-trading ~/.cursor/skills/
 cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.cursor/skills/
 cp -R macd-second-golden-cross ~/.cursor/skills/
 cp -R macd-trend-resonance-stock-picker ~/.cursor/skills/
 cp -R tuige-shortline-trading ~/.cursor/skills/
 cp -R pankou_stock_change ~/.cursor/skills/
+cp -R a-share-strategy-allmarket-multi-swing-defensive ~/.cursor/skills/
+cp -R a-share-paper-trading ~/.cursor/skills/
 ```
 
 ### Claude Code
@@ -212,15 +321,16 @@ cp -R pankou_stock_change ~/.cursor/skills/
 ```bash
 mkdir -p ~/.claude/skills
 cp -R a-share-data ~/.claude/skills/
-cp -R a-share-paper-trading ~/.claude/skills/
 cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.claude/skills/
 cp -R macd-second-golden-cross ~/.claude/skills/
 cp -R macd-trend-resonance-stock-picker ~/.claude/skills/
 cp -R tuige-shortline-trading ~/.claude/skills/
 cp -R pankou_stock_change ~/.claude/skills/
+cp -R a-share-strategy-allmarket-multi-swing-defensive ~/.claude/skills/
+cp -R a-share-paper-trading ~/.claude/skills/
 ```
 
-### OpenCode
+### Qoder
 
 ```bash
 mkdir -p ~/.opencode/skills
@@ -231,12 +341,16 @@ cp -R macd-second-golden-cross ~/.opencode/skills/
 cp -R macd-trend-resonance-stock-picker ~/.opencode/skills/
 cp -R tuige-shortline-trading ~/.opencode/skills/
 cp -R pankou_stock_change ~/.opencode/skills/
+mkdir -p ~/.qoder/skills
+cp -R a-share-data ~/.qoder/skills/
+cp -R a-share-strategy-mainboard-multi-swing-defensive ~/.qoder/skills/
+cp -R a-share-strategy-allmarket-multi-swing-defensive ~/.qoder/skills/
+cp -R a-share-paper-trading ~/.qoder/skills/
 ```
 
-如果你的 OpenCode 使用的是自定义 skills 路径，请把上面的目录替换成你本机配置路径。
+如果你用的是 OpenCode、openclaw 或其他支持 skills 的 AI 工具，只需要把路径替换成对应工具的 skills 目录。
 
-### Codex
-
+## 文档导航
 ```bash
 mkdir -p ~/.agents/skills
 cp -R a-share-data ~/.agents/skills/
@@ -247,9 +361,15 @@ cp -R macd-trend-resonance-stock-picker ~/.agents/skills/
 cp -R tuige-shortline-trading ~/.agents/skills/
 cp -R pankou_stock_change ~/.agents/skills/
 ```
+- [A股数据安装使用文档](docs/A股数据安装使用文档.md)
+- [主板趋势回踩策略安装使用文档](docs/主板趋势回踩策略安装使用文档.md)
+- [全市场趋势回踩策略说明](docs/a-share-strategy-allmarket-multi-swing-defensive.md)
+- [模拟仓安装使用文档](docs/模拟仓安装使用文档.md)
+- [主板趋势回踩策略与模拟仓联动案例](docs/主板趋势回踩策略与模拟仓联动案例.md)
 
-### 安装后快速自检
+## 其他 Skill
 
+<<<<<<< HEAD
 1. 确认目标目录下存在 `a-share-data/SKILL.md`、`a-share-paper-trading/SKILL.md`、`a-share-strategy-mainboard-multi-swing-defensive/SKILL.md`、`macd-second-golden-cross/SKILL.md`、`macd-trend-resonance-stock-picker/SKILL.md`、`tuige-shortline-trading/SKILL.md` 与 `pankou_stock_change/SKILL.md`
 2. 新开会话后发一个明确请求，例如：
    - “用 a-share-data 拉取 600519 最近 20 个交易日的日线”
@@ -259,9 +379,18 @@ cp -R pankou_stock_change ~/.agents/skills/
   - “用 macd-trend-resonance-stock-picker 生成今日 A/B/C/D 候选并给出触发与失效条件”
   - “用 tuige-shortline-trading 按场景给这只票做 trigger/invalidation/risk/position_grade 判断”
   - “用 pankou-stock-change 分析 603738 在 20260611 的盘口强度并给出买卖信号”
+- `macd-second-golden-cross`
+  - 适合判断“MACD 底背离 + 零轴下二次金叉”这类修复型机会
 
-### 参考文档
+- `macd-trend-resonance-stock-picker`
+  - 适合做“均线定方向，MACD 定节奏”的趋势共振选股
+
+- `tuige-shortline-trading`
+  - 适合按短线场景做 trigger / invalidation / risk / position_grade 判断
+
+## 参考
 
 - Cursor: [Agent Skills](https://www.trycursor.com/docs/context/skills)
 - Claude Code: [Extend Claude with skills](https://code.claude.com/docs/en/skills.md)
 - Codex: [Agent Skills](https://developers.openai.com/codex/skills)
+- Qoder: [Skills](https://docs.qoder.com/extensions/skills)
